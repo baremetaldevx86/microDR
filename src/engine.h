@@ -8,6 +8,7 @@
 //
 // Tensor object
 //
+//
 typedef struct Tensor {
     float* data;      // data buffer (scalar or matrix)
     float* grad;      // gradient buffer
