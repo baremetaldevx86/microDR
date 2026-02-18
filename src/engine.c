@@ -4,6 +4,7 @@
 #include <stdlib.h>
 
 // =============================================================
+// =============================================================
 // Internal helpers
 // =============================================================
 
@@ -50,28 +51,24 @@ static void list_free(TensorList* l) {
 // but let's just make the visited array dynamic or large enough and check properly.
 // For this simple engine, we can check existence in the visited array.
 
-static int is_visited(Tensor** visited, int count, Tensor* t) {
-    for (int i = 0; i < count; i++) {
-        if (visited[i] == t)return 1;
+static int is_visited(TensorList* visited, Tensor* t) {
+    for (int i = 0; i < visited->size; i++) {
+        if (visited->items[i] == t) return 1;
     }
     return 0;
 }
 
-static void build_topo(Tensor* v, TensorList* topo, Tensor** visited, int* visited_count) {
-    if (is_visited(visited, *visited_count, v)) return;
+static void build_topo(Tensor* v, TensorList* topo, TensorList* visited) {
+    if (is_visited(visited, v)) return;
 
-    visited[(*visited_count)++] = v;
+    list_push(visited, v);
 
     for (int i = 0; i < v->n_parents; i++) {
-        build_topo(v->parents[i], topo, visited, visited_count);
+        build_topo(v->parents[i], topo, visited);
     }
 
     list_push(topo, v);
 }
-
-// ============================================================
-// Tensor creation
-// ============================================================
 
 Tensor* tensor_create(float x) {
     Tensor* t = (Tensor*)malloc(sizeof(Tensor));
@@ -120,9 +117,7 @@ Tensor* tensor_create_matrix(int rows, int cols) {
     return t;
 }
 
-// ============================================================
-// Memory management
-// ============================================================
+// ...
 
 void tensor_retain(Tensor* t) {
     if (t) {
@@ -134,6 +129,7 @@ void tensor_release(Tensor* t) {
     if (!t) return;
 
     t->ref_count--;
+
     if (t->ref_count <= 0) {
         // Release parents
         if (t->parents) {
@@ -649,15 +645,9 @@ Tensor* tensor_matmul(Tensor* A, Tensor* B) {
 
 void tensor_backward(Tensor* t) {
     TensorList* topo = list_create();
+    TensorList* visited = list_create();
 
-    // dynamically allocate visited to avoid fixed size limit
-    int capacity = 10000;
-    int visited_count = 0;
-    Tensor** visited = (Tensor**)malloc(sizeof(Tensor*) * capacity);
-
-    // We'd need to resize visited if we overflow, but for now let's just assert or expand
-    // Actually simplicity:
-    build_topo(t, topo, visited, &visited_count);
+    build_topo(t, topo, visited);
     
     // ZERO ALL GRADS
     for (int i = 0; i < topo->size; i++) {
@@ -681,7 +671,7 @@ void tensor_backward(Tensor* t) {
     }
     
     // cleanup topo list
-    free(visited);
+    list_free(visited);
     list_free(topo);
 }
 

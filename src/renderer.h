@@ -12,16 +12,31 @@ static inline Tensor* render_pixel(
     Tensor* k
 ) {
     // Fixed depth sample(generalize later) 
-    Tensor* t = tensor_create(1.0f);
+    Tensor* t = tensor_create(0.5f);
 
-    Vec3 p = vec3_add(ray_origin, vec3_scale(ray_dir, t));
+    Vec3 ray_scaled = vec3_scale(ray_dir, t);
+    Vec3 p = vec3_add(ray_origin, ray_scaled);
+    
+    vec3_release(ray_scaled);
 
     Tensor* d = sdf_sphere(p, sphere_center, radius);
 
-    Tensor* neg = tensor_create(-1.0f);
-    Tensor* neg_kd = tensor_mul(neg, tensor_mul(k, d));
+    vec3_release(p);
 
-    return tensor_expn(neg_kd);   // soft visibility
+    Tensor* neg = tensor_create(-1.0f);
+    Tensor* kd = tensor_mul(k, d);
+    tensor_release(d);
+
+    Tensor* neg_kd = tensor_mul(neg, kd);
+    tensor_release(neg);
+    tensor_release(kd);
+
+    Tensor* res = tensor_expn(neg_kd);   // soft visibility
+    
+    tensor_release(neg_kd);
+    tensor_release(t);
+    
+    return res;
 }
 
 #endif

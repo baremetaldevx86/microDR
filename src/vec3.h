@@ -34,12 +34,26 @@ static inline Vec3 vec3_scale(Vec3 v, Tensor* s) {
     };
 }
 
+static inline void vec3_release(Vec3 v) {
+    tensor_release(v.x);
+    tensor_release(v.y);
+    tensor_release(v.z);
+}
+
 static inline Tensor* vec3_dot(Vec3 a, Vec3 b) {
     Tensor* xx = tensor_mul(a.x, b.x); 
     Tensor* yy = tensor_mul(a.y, b.y); 
     Tensor* zz = tensor_mul(a.z, b.z); 
 
-    return tensor_add(tensor_add(xx, yy), zz);
+    Tensor* tmp = tensor_add(xx, yy);
+    Tensor* res = tensor_add(tmp, zz);
+
+    tensor_release(xx);
+    tensor_release(yy);
+    tensor_release(zz);
+    tensor_release(tmp);
+
+    return res;
 }
 
 #endif
