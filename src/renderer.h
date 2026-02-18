@@ -3,6 +3,7 @@
 
 #include "sdf.h"
 
+
 static inline Tensor* render_pixel(
     Vec3 ray_origin,
     Vec3 ray_dir,
@@ -10,7 +11,7 @@ static inline Tensor* render_pixel(
     Tensor* radius,
     Tensor* k
 ) {
-    // Fixed depth sample (we'll generalize later)
+    // Fixed depth sample(generalize later) 
     Tensor* t = tensor_create(1.0f);
 
     Vec3 p = vec3_add(ray_origin, vec3_scale(ray_dir, t));
