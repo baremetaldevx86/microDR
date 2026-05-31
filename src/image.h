@@ -1,8 +1,14 @@
 #ifndef IMAGE_H
 #define IMAGE_H
 
-#include <stdio.h>
+#include <stdlib.h>
 #include "renderer.h"
+
+/* STB_IMAGE_WRITE_STATIC makes all stb functions static so this header
+   can be included from multiple translation units without link errors. */
+#define STB_IMAGE_WRITE_STATIC
+#define STB_IMAGE_WRITE_IMPLEMENTATION
+#include "stb_image_write.h"
 
 static inline unsigned char clamp_u8(float v) {
     if (v < 0.0f) v = 0.0f;
@@ -10,18 +16,18 @@ static inline unsigned char clamp_u8(float v) {
     return (unsigned char)(v * 255.0f + 0.5f);
 }
 
-/* binary P6 PPM */
-static inline void write_ppm(const char* path, Image3 img, int W, int H) {
-    FILE* f = fopen(path, "wb");
-    if (!f) { fprintf(stderr, "write_ppm: cannot open %s\n", path); return; }
-    fprintf(f, "P6\n%d %d\n255\n", W, H);
+static inline void write_png(const char* path, Image3 img, int W, int H) {
     int N = W * H;
+    unsigned char* buf = (unsigned char*)malloc(N * 3);
+    if (!buf) { fprintf(stderr, "write_png: out of memory\n"); return; }
     for (int i = 0; i < N; i++) {
-        fputc(clamp_u8(img.r->data[i]), f);
-        fputc(clamp_u8(img.g->data[i]), f);
-        fputc(clamp_u8(img.b->data[i]), f);
+        buf[i*3 + 0] = clamp_u8(img.r->data[i]);
+        buf[i*3 + 1] = clamp_u8(img.g->data[i]);
+        buf[i*3 + 2] = clamp_u8(img.b->data[i]);
     }
-    fclose(f);
+    if (!stbi_write_png(path, W, H, 3, buf, W * 3))
+        fprintf(stderr, "write_png: failed to write %s\n", path);
+    free(buf);
 }
 
 #endif

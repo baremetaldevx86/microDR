@@ -33,8 +33,8 @@ int main(void) {
         CHECK(isfinite(img.b->data[i]), "pixel finite b");
     }
 
-    write_ppm("tests/forward.ppm", img, W, H);
-    printf("wrote tests/forward.ppm (%dx%d)\n", W, H);
+    write_png("tests/forward.png", img, W, H);
+    printf("wrote tests/forward.png (%dx%d)\n", W, H);
 
     tensor_release(img.r);
     tensor_release(img.g);

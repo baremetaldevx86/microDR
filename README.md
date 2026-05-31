@@ -136,11 +136,8 @@ make          # builds ./dr_test
               # writes target.ppm + pred_0000.ppm, pred_0050.ppm, ...
 ```
 
-To view PPM files: any image viewer, or convert with ImageMagick:
-
-```sh
-convert pred_0399.ppm pred_0399.png
-```
+Output images are written as PNG files (`target.png`, `pred_0000.png`, …)
+and can be opened directly in any image viewer.
 
 ---
 
@@ -194,4 +191,3 @@ src/
 - **Adam optimizer** — faster convergence than vanilla SGD
 - **Hash-set topo sort** — the current O(N²) visited check in `tensor_backward`
   is fine for small graphs but becomes the bottleneck at large image sizes
-# trigger refresh

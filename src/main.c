@@ -33,7 +33,7 @@ int main(void) {
         gt.light_dir = light_dir; gt.k = k; gt.ambient = ambient; gt.bg = bg;
 
         Image3 gt_img = render_image(rays, gt);
-        write_ppm("target.ppm", gt_img, W, H);
+        write_png("target.png", gt_img, W, H);
         for (int i = 0; i < N; i++) {
             tr->data[i] = gt_img.r->data[i];
             tg->data[i] = gt_img.g->data[i];
@@ -85,8 +85,8 @@ int main(void) {
                    iter, last_loss, cx->data[0], cy->data[0], cz->data[0],
                    radius->data[0], ar->data[0], ag->data[0], ab->data[0]);
             char path[64];
-            snprintf(path, sizeof(path), "pred_%04d.ppm", iter);
-            write_ppm(path, pred, W, H);
+            snprintf(path, sizeof(path), "pred_%04d.png", iter);
+            write_png(path, pred, W, H);
         }
 
         tensor_release(loss);
