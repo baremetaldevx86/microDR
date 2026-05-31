@@ -22,8 +22,9 @@ can be added later without a rewrite.
    rendering), not a minimal toy.
 2. **Data flow:** fully **vectorized** over rays — the whole image renders
    through one computation graph.
-3. **Shading:** **Lambertian RGB**, surface normals from the finite-difference
-   SDF gradient (no second-order autograd needed).
+3. **Shading:** **Lambertian RGB**. Geometry via **analytic ray–sphere
+   intersection** (see "Rendering pipeline"); the surface normal is the
+   analytic `normalize(p − center)`.
 4. **Scene scope:** **single sphere**; optimize center (3), radius (1), albedo
    RGB (3), optionally light direction (3). Interfaces structured for later
    multi-primitive composition.
@@ -84,28 +85,34 @@ in this milestone set.
 
 ## Rendering pipeline
 
-Replaces the per-pixel `renderer.h` with a vectorized pipeline.
+Replaces the per-pixel `renderer.h` with a vectorized, **analytic ray–sphere**
+pipeline. This was chosen over a generic SDF sphere-trace because the naive
+marched silhouette (`sigmoid(−k·sdf_final)`) collapses to a flat 0.5-alpha disk
+— the march stops at the surface and never produces the negative interior
+distances that fill the mask. The analytic form is closed-form, fully
+differentiable, and gives a correct filled silhouette + soft edge. Generic SDF
+sphere tracing (with closest-approach `min`-tracking to fix the silhouette
+properly) is the documented upgrade path, alongside multi-primitive `min`.
 
-- **Camera** (`camera.h`): generate `ray_origin[N]` and `ray_dir[N]` for an
-  H×W image from a simple pinhole camera. Directions normalized using the
-  ε-safe length.
-- **Sphere trace** (`renderer.h`/`renderer.c`): an **unrolled loop of K fixed
-  steps**. Each step: `d = sdf_sphere(p); t = t + d; p = origin + t·dir`. After
-  K steps, `p ≈ surface`; compute `sdf_final = sdf_sphere(p)`.
-  - **Differentiation strategy (decided):** **unroll all K steps into the
-    graph** so gradients flow through every step. Fully autograd-native and
-    simplest. The alternative — implicit/surface differentiation (detach the
-    march, attach gradient only at the converged surface point) — is faster and
-    lower-memory but requires manual gradient math; it is a **later
-    optimization**, out of scope now.
-- **Normal**: finite-difference SDF gradient (tetrahedron technique, 4 SDF
-  evals), then normalize (ε-safe). Differentiable w.r.t. scene params.
+Let camera origin `o` be **scalar** `[1]` components (same for all pixels), ray
+direction `v` be a **field** `[N]`, sphere `center` and `radius` scalar `[1]`.
+
+- **Camera** (`camera.h`): pinhole. Origin = 3 scalar `[1]` tensors; direction =
+  3 field `[N]` tensors, one normalized ray per pixel.
+- **Intersection + silhouette** (`renderer.h`):
+  - `oc = center − origin` (scalar `[1]`); `tca = dot(oc, v)` (`[N]`);
+    `d2 = dot(oc,oc) − tca²` (perpendicular distance², `[N]`).
+  - `perp = sqrt(d2 + ε)`; silhouette distance `sil = perp − radius` (negative
+    *inside* the disk). `mask = sigmoid(−k·sil)` → correct filled silhouette
+    with a soft edge.
+  - hit depth `t_hit = tca − sqrt(relu(radius² − d2) + ε)`; hit point
+    `p = origin + t_hit·v`.
+- **Normal**: `n = normalize(p − center)` (analytic, ε-safe).
 - **Shade**: `lambert = relu(dot(n, light_dir))`; per channel
-  `color_c = albedo_c · lambert + ambient`.
-- **Composite**: `mask = sigmoid(−k·sdf_final)`;
-  `color = mask·shaded + (1−mask)·background`. The soft mask provides
-  silhouette/shape gradients; shading provides interior shape and albedo
-  gradients.
+  `shaded_c = albedo_c · lambert + ambient`.
+- **Composite**: `color_c = mask·shaded_c + (1−mask)·background_c`. The mask
+  provides silhouette/shape gradients; shading provides interior shape and
+  albedo gradients.
 
 ## Inverse-rendering loop (`main.c`)
 
@@ -134,9 +141,9 @@ Replaces the per-pixel `renderer.h` with a vectorized pipeline.
 |---|---|
 | `engine.c` / `engine.h` | broadcasting for `mul`/`sub`/`div`, `sqrt` ε-fix, `sigmoid` |
 | `vec3.h` | unchanged ops + add `vec3_length` and `vec3_normalize` (ε-safe) |
-| `sdf.h` | `sdf_sphere` using ε-safe length; structured for later `min` |
-| `camera.h` | pinhole ray generation over the image grid |
-| `renderer.h` / `renderer.c` | march + normal + shade + composite |
+| `sdf.h` | `sdf_sphere` using ε-safe length; kept for the future generic-SDF upgrade (not used by the analytic renderer) |
+| `camera.h` | pinhole ray generation (`Rays`: scalar origin, field dir) |
+| `renderer.h` | analytic intersection + normal + shade + composite (header-only) |
 | `image.h` | PPM output (pred, target, error map) |
 | `loss.h` | keep `mse` (mean of squared difference) |
 | `main.c` | inverse-rendering loop + gradient check |
@@ -145,20 +152,22 @@ Replaces the per-pixel `renderer.h` with a vectorized pipeline.
 
 1. **Engine:** broadcasting + `sqrt` ε-fix + `sigmoid`, with a small unit test
    and a finite-difference gradient check on each new/changed op.
-2. **Forward render:** camera + march + shade + composite → dump a single PPM of
-   a hard-coded sphere. *Verify by eye it looks like a shaded sphere.*
+2. **Forward render:** camera + analytic intersection + shade + composite → dump
+   a single PPM of a hard-coded sphere. *Verify by eye it looks like a shaded
+   sphere; assert a center pixel is brighter than a corner pixel.*
 3. **End-to-end gradient check:** loss gradient w.r.t. center, radius, and
    albedo matches central finite differences.
 4. **Inverse rendering:** perturb ground truth, recover params, confirm loss → 0
    and the dumped PPMs converge to the target.
-5. *(Later, out of scope now)* multi-primitive `min`-composition, soft shadows,
-   faster (hash-set) topo sort, Adam optimizer.
+5. *(Later, out of scope now)* generic SDF sphere tracing with closest-approach
+   `min`-tracking, multi-primitive `min`-composition, soft shadows, faster
+   (hash-set) topo sort, Adam optimizer.
 
 ## Out of scope (explicitly deferred)
 
-- Multiple primitives / general SDF scenes (`min`/`max`).
+- Generic SDF sphere tracing (march loop) and multi-primitive scenes
+  (`min`/`max`). The single-sphere milestone uses analytic intersection.
 - Soft shadows and a secondary march toward the light.
-- Implicit surface differentiation of the march.
 - Adam / momentum optimizers.
 - Hash-set topo sort (O(N²) accepted for now).
 - PNG output (PPM only; convert externally if desired).
