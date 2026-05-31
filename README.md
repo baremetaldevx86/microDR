@@ -1,7 +1,7 @@
 # microDR
 
-A tiny differentiable renderer written from scratch in pure C, inspired by
-[micrograd](https://github.com/karpathy/micrograd) by Andrej Karpathy.
+A tiny differentiable 3D renderer written from scratch in pure C, built using [minigrad](https://github.com/baremetaldevx86/minigrad) - a custom reverse-mode automatic differentiation engine also written from scratch in C.
+
 
 It builds a scalar/tensor autograd engine (reverse-mode autodiff, C99, no
 dependencies) and uses it to render a sphere with Lambertian shading — then
