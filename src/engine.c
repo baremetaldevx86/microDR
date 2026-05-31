@@ -3,6 +3,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+#define SQRT_EPS 1e-7f
+
 // =============================================================
 // =============================================================
 // Internal helpers
@@ -326,11 +328,10 @@ static void div_backward(Tensor* self) {
 static void sqrt_backward(Tensor* self) {
     Tensor* a = self->parents[0];
 
-    for(int i = 0; i < self->size; i++) {
+    for (int i = 0; i < self->size; i++) {
         float grad = self->grad[i];
-        float y = self->data[i];
-
-        a->grad[i] += grad / (2 * y);
+        float y = self->data[i];                 // y = sqrt(a)
+        a->grad[i] += grad / (2.0f * y + SQRT_EPS);
     }
 }
 
@@ -493,15 +494,16 @@ Tensor* tensor_div(Tensor* a, Tensor* b) {
 
 Tensor* tensor_sqrt(Tensor* a) {
     Tensor* c;
-    
+
     if(a->ndim == 0){
         c = tensor_create(0.0f);
     } else {
         c = tensor_create_matrix(a->shape[0], a->shape[1]);
     }
-    
+
     for(int i = 0; i < a->size; i++) {
-        c->data[i] = sqrt(a->data[i]);
+        float v = a->data[i];
+        c->data[i] = sqrtf(v > 0.0f ? v : 0.0f);
     }
 
     c->n_parents = 1;
