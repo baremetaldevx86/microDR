@@ -35,7 +35,7 @@ test-render: tests/test_render
 test-gradcheck: tests/test_gradcheck
 	./tests/test_gradcheck
 
-test: test-engine
+test: test-engine test-render test-gradcheck
 
 clean:
 	rm -f $(OBJS) $(TARGET) tests/test_engine tests/test_render tests/test_gradcheck
