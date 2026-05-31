@@ -3,7 +3,9 @@
 
 #include "engine.h"
 
-//vector 
+#define VEC_EPS 1e-8f
+
+//vector
 typedef struct {
    Tensor* x; 
    Tensor* y;
@@ -54,6 +56,28 @@ static inline Tensor* vec3_dot(Vec3 a, Vec3 b) {
     tensor_release(tmp);
 
     return res;
+}
+
+static inline Tensor* vec3_length(Vec3 v) {
+    Tensor* d2  = vec3_dot(v, v);            /* x^2+y^2+z^2 */
+    Tensor* eps = tensor_create(VEC_EPS);
+    Tensor* d2e = tensor_add(d2, eps);       /* scalar broadcast if field */
+    Tensor* len = tensor_sqrt(d2e);
+    tensor_release(d2);
+    tensor_release(eps);
+    tensor_release(d2e);
+    return len;
+}
+
+static inline Vec3 vec3_normalize(Vec3 v) {
+    Tensor* len = vec3_length(v);
+    Vec3 r = {
+        tensor_div(v.x, len),
+        tensor_div(v.y, len),
+        tensor_div(v.z, len)
+    };
+    tensor_release(len);
+    return r;
 }
 
 #endif

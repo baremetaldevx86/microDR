@@ -1,4 +1,6 @@
 #include "engine.h"
+#include "vec3.h"
+#include "camera.h"
 #include "tests/test_util.h"
 
 /* ---- test functions are appended in later tasks ---- */
@@ -123,6 +125,56 @@ static void test_sigmoid(void) {
     tensor_release(sm);
 }
 
+static void test_vec3_length_normalize(void) {
+    Vec3 v = { tensor_create(3.0f), tensor_create(0.0f), tensor_create(4.0f) };
+    Tensor* len = vec3_length(v);
+    CHECK_CLOSE(len->data[0], 5.0f, 1e-4f, "vec3_length 3-4-5");
+    tensor_release(len);
+
+    Vec3 n = vec3_normalize(v);
+    Tensor* nlen = vec3_length(n);
+    CHECK_CLOSE(nlen->data[0], 1.0f, 1e-4f, "normalized length 1");
+    tensor_release(nlen);
+    vec3_release(n);
+
+    /* zero vector must not produce NaN */
+    Vec3 z = { tensor_create(0.0f), tensor_create(0.0f), tensor_create(0.0f) };
+    Tensor* zlen = vec3_length(z);
+    CHECK(isfinite(zlen->data[0]), "length(0) finite");
+    Vec3 zn = vec3_normalize(z);
+    CHECK(isfinite(zn.x->data[0]), "normalize(0) finite");
+    tensor_release(zlen);
+    vec3_release(zn);
+    vec3_release(z);
+
+    vec3_release(v);
+}
+
+static void test_camera(void) {
+    int W = 4, H = 4, N = W * H;
+    Rays r = camera_rays(W, H);
+
+    /* origin is scalar [1] components at the camera position (0,0,0) */
+    CHECK(r.origin.x->size == 1, "origin scalar");
+    CHECK_CLOSE(r.origin.x->data[0], 0.0f, 1e-6f, "origin x");
+
+    /* directions are a field [N] */
+    CHECK(r.dir.x->size == N, "dir field size");
+
+    /* every direction is unit length and points into -z */
+    for (int i = 0; i < N; i++) {
+        float dx = r.dir.x->data[i];
+        float dy = r.dir.y->data[i];
+        float dz = r.dir.z->data[i];
+        float len = sqrtf(dx*dx + dy*dy + dz*dz);
+        CHECK_CLOSE(len, 1.0f, 1e-4f, "dir unit length");
+        CHECK(dz < 0.0f, "dir points into -z");
+    }
+
+    vec3_release(r.origin);
+    vec3_release(r.dir);
+}
+
 int main(void) {
     /* smoke: scalar add still works */
     Tensor* a = tensor_create(2.0f);
@@ -137,6 +189,8 @@ int main(void) {
     test_sigmoid();
     test_add_broadcast();
     test_sub_mul_div_broadcast();
+    test_vec3_length_normalize();
+    test_camera();
 
     TEST_PASS();
     return 0;
