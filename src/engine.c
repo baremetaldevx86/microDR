@@ -197,26 +197,27 @@ static void add_backward(Tensor* self) {
 static void sub_backward(Tensor* self) {
     Tensor* a = self->parents[0];
     Tensor* b = self->parents[1];
+    int an = a->size, bn = b->size, n = self->size;
 
-    for (int i = 0; i < self->size; i++) {
-        a->grad[i] += self->grad[i];
-        b->grad[i] -= self->grad[i];
+    for (int i = 0; i < n; i++) {
+        int ai = (an == 1) ? 0 : i;
+        int bi = (bn == 1) ? 0 : i;
+        a->grad[ai] += self->grad[i];
+        b->grad[bi] -= self->grad[i];
     }
-    //broadcasting
-    
-
 }
 
 static void mul_backward(Tensor* self) {
     Tensor* a = self->parents[0];
     Tensor* b = self->parents[1];
+    int an = a->size, bn = b->size, n = self->size;
 
-    for (int i = 0; i < self->size; i++) {
-        a->grad[i] += b->data[i] * self->grad[i];
-        b->grad[i] += a->data[i] * self->grad[i];
+    for (int i = 0; i < n; i++) {
+        int ai = (an == 1) ? 0 : i;
+        int bi = (bn == 1) ? 0 : i;
+        a->grad[ai] += b->data[bi] * self->grad[i];
+        b->grad[bi] += a->data[ai] * self->grad[i];
     }
-    // broadcasting:
-    
 }
 
 static void mean_backward(Tensor* self) {
@@ -325,16 +326,17 @@ static void matmul_backward(Tensor* C) {
 static void div_backward(Tensor* self) {
     Tensor* a = self->parents[0];
     Tensor* b = self->parents[1];
+    int an = a->size, bn = b->size, n = self->size;
 
-    for (int i = 0; i < self->size; i++) {
-        float grad = self->grad[i];
-        float av = a->data[i];
-        float bv = b->data[i];
-
-        a->grad[i] += grad / bv;
-        b->grad[i] += -av * grad / (bv * bv);
+    for (int i = 0; i < n; i++) {
+        int ai = (an == 1) ? 0 : i;
+        int bi = (bn == 1) ? 0 : i;
+        float av = a->data[ai];
+        float bv = b->data[bi];
+        float g  = self->grad[i];
+        a->grad[ai] += g / bv;
+        b->grad[bi] += -av * g / (bv * bv);
     }
-    
 }
 
 static void sqrt_backward(Tensor* self) {
@@ -397,23 +399,23 @@ Tensor* tensor_add(Tensor* a, Tensor* b) {
 }
 
 Tensor* tensor_sub(Tensor* a, Tensor* b) {
-    Tensor* c;
-    if (a->ndim == 0 && b->ndim == 0) {
-        c = tensor_create(0.0f);
-    } else {
-        int rows = (a->shape) ? a->shape[0] : b->shape[0];
-        int cols = (a->shape) ? a->shape[1] : b->shape[1];
-        c = tensor_create_matrix(rows, cols);
+    int an = a->size, bn = b->size;
+    if (an != bn && an != 1 && bn != 1) {
+        printf("tensor_sub shape mismatch\n");
+        exit(1);
     }
-
-    for (int i = 0; i < a->size; i++) {
-        c->data[i] = a->data[i] - b->data[i];
+    Tensor* c = alloc_broadcast(a, b);
+    int n = c->size;
+    for (int i = 0; i < n; i++) {
+        float av = (an == 1) ? a->data[0] : a->data[i];
+        float bv = (bn == 1) ? b->data[0] : b->data[i];
+        c->data[i] = av - bv;
     }
 
     c->parents = (Tensor**)malloc(sizeof(Tensor*) * 2);
     c->parents[0] = a;
     c->parents[1] = b;
-    tensor_retain(a); 
+    tensor_retain(a);
     tensor_retain(b);
     c->n_parents = 2;
     c->backward = sub_backward;
@@ -442,24 +444,17 @@ Tensor* tensor_mean(Tensor *a) {
 
 
 Tensor* tensor_mul(Tensor* a, Tensor* b) {
-    Tensor* c;
-
-    if (a->size != b->size) {
+    int an = a->size, bn = b->size;
+    if (an != bn && an != 1 && bn != 1) {
         printf("tensor_mul shape mismatch\n");
         exit(1);
     }
-
-
-    if (a->ndim == 0 && b->ndim == 0) {
-        c = tensor_create(0.0f);
-    } else {
-        int rows = (a->shape) ? a->shape[0] : b->shape[0];
-        int cols = (a->shape) ? a->shape[1] : b->shape[1];
-        c = tensor_create_matrix(rows, cols);
-    }
-  
-    for (int i = 0; i < a->size; i++) {
-        c->data[i] = a->data[i] * b->data[i];
+    Tensor* c = alloc_broadcast(a, b);
+    int n = c->size;
+    for (int i = 0; i < n; i++) {
+        float av = (an == 1) ? a->data[0] : a->data[i];
+        float bv = (bn == 1) ? b->data[0] : b->data[i];
+        c->data[i] = av * bv;
     }
 
     c->n_parents = 2;
@@ -468,30 +463,22 @@ Tensor* tensor_mul(Tensor* a, Tensor* b) {
     c->parents[1] = b;
     tensor_retain(a);
     tensor_retain(b);
-
     c->backward = mul_backward;
     return c;
 }
 
 Tensor* tensor_div(Tensor* a, Tensor* b) {
-
-    if(a->size != b->size) {
-        printf("tensor_div shape mismatch");
+    int an = a->size, bn = b->size;
+    if (an != bn && an != 1 && bn != 1) {
+        printf("tensor_div shape mismatch\n");
         exit(1);
     }
-
-    Tensor* c;
-    
-    if(a->ndim == 0 && b->ndim == 0) {
-        c = tensor_create(0.0f);
-    } else {
-        int rows = a->shape[0];
-        int cols = a->shape[1];
-        c = tensor_create_matrix(rows, cols);
-    }
-
-    for(int i = 0; i < a->size; i++) {
-        c->data[i] = a->data[i] / b->data[i];
+    Tensor* c = alloc_broadcast(a, b);
+    int n = c->size;
+    for (int i = 0; i < n; i++) {
+        float av = (an == 1) ? a->data[0] : a->data[i];
+        float bv = (bn == 1) ? b->data[0] : b->data[i];
+        c->data[i] = av / bv;
     }
 
     c->n_parents = 2;
@@ -500,10 +487,8 @@ Tensor* tensor_div(Tensor* a, Tensor* b) {
     c->parents[1] = b;
     tensor_retain(a);
     tensor_retain(b);
-
     c->backward = div_backward;
     return c;
-    
 }
 
 Tensor* tensor_sqrt(Tensor* a) {

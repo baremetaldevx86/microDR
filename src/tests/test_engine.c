@@ -30,6 +30,41 @@ static void test_sqrt_safe(void) {
     tensor_release(p);
 }
 
+static void test_sub_mul_div_broadcast(void) {
+    Tensor* f = tensor_create_matrix(3, 1);
+    f->data[0] = 2.0f; f->data[1] = 4.0f; f->data[2] = 6.0f;
+    Tensor* s = tensor_create(2.0f);
+
+    /* sub: field - scalar */
+    Tensor* d = tensor_sub(f, s);
+    CHECK_CLOSE(d->data[1], 2.0f, 1e-6f, "sub bc fwd");
+    tensor_backward(d);
+    CHECK_CLOSE(f->grad[1], 1.0f, 1e-6f, "sub bc grad f");
+    CHECK_CLOSE(s->grad[0], -3.0f, 1e-6f, "sub bc grad s (sum of -1)");
+    tensor_release(d);
+
+    /* mul: scalar * field */
+    Tensor* m = tensor_mul(s, f);
+    CHECK_CLOSE(m->data[2], 12.0f, 1e-6f, "mul bc fwd");
+    tensor_backward(m);
+    /* d/df = s = 2 each; d/ds = sum(f) = 12 */
+    CHECK_CLOSE(f->grad[0], 2.0f, 1e-6f, "mul bc grad f");
+    CHECK_CLOSE(s->grad[0], 12.0f, 1e-6f, "mul bc grad s");
+    tensor_release(m);
+
+    /* div: field / scalar */
+    Tensor* q = tensor_div(f, s);
+    CHECK_CLOSE(q->data[0], 1.0f, 1e-6f, "div bc fwd");
+    tensor_backward(q);
+    /* d/df = 1/s = 0.5 each; d/ds = sum(-f/s^2) = -(2+4+6)/4 = -3 */
+    CHECK_CLOSE(f->grad[0], 0.5f, 1e-6f, "div bc grad f");
+    CHECK_CLOSE(s->grad[0], -3.0f, 1e-6f, "div bc grad s");
+    tensor_release(q);
+
+    tensor_release(f);
+    tensor_release(s);
+}
+
 static void test_add_broadcast(void) {
     /* field [3x1] + scalar [1] */
     Tensor* f = tensor_create_matrix(3, 1);
@@ -97,6 +132,7 @@ int main(void) {
     test_sqrt_safe();
     test_sigmoid();
     test_add_broadcast();
+    test_sub_mul_div_broadcast();
 
     TEST_PASS();
     return 0;
