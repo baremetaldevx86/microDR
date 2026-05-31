@@ -19,6 +19,7 @@ static void exp_backward(Tensor* self);
 static void tanh_backward(Tensor* self);
 static void relu_backward(Tensor* self);
 static void matmul_backward(Tensor* self);
+static void sigmoid_backward(Tensor* self);
 
 // -------------------- Dynamic list for topo -----------------
 
@@ -335,6 +336,15 @@ static void sqrt_backward(Tensor* self) {
     }
 }
 
+static void sigmoid_backward(Tensor* self) {
+    Tensor* a = self->parents[0];
+
+    for (int i = 0; i < self->size; i++) {
+        float y = self->data[i];                  // y = sigmoid(a)
+        a->grad[i] += y * (1.0f - y) * self->grad[i];
+    }
+}
+
 // ============================================================
 // Forward ops
 // ============================================================
@@ -602,6 +612,36 @@ Tensor* tensor_relu(Tensor* a) {
     tensor_retain(a);
 
     c->backward = relu_backward;
+    return c;
+}
+
+static float sigmoid_stable(float x) {
+    if (x >= 0.0f) {
+        float z = expf(-x);
+        return 1.0f / (1.0f + z);
+    } else {
+        float z = expf(x);
+        return z / (1.0f + z);
+    }
+}
+
+Tensor* tensor_sigmoid(Tensor* a) {
+    Tensor* c;
+    if (a->ndim == 0) {
+        c = tensor_create(sigmoid_stable(*(a->data)));
+    } else {
+        c = tensor_create_matrix(a->shape[0], a->shape[1]);
+        for (int i = 0; i < a->size; i++) {
+            c->data[i] = sigmoid_stable(a->data[i]);
+        }
+    }
+
+    c->n_parents = 1;
+    c->parents = (Tensor**)malloc(sizeof(Tensor*));
+    c->parents[0] = a;
+    tensor_retain(a);
+
+    c->backward = sigmoid_backward;
     return c;
 }
 

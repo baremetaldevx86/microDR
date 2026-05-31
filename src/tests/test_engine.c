@@ -30,6 +30,34 @@ static void test_sqrt_safe(void) {
     tensor_release(p);
 }
 
+static void test_sigmoid(void) {
+    /* sigmoid(0) = 0.5 */
+    Tensor* z = tensor_create(0.0f);
+    Tensor* s = tensor_sigmoid(z);
+    CHECK_CLOSE(s->data[0], 0.5f, 1e-6f, "sigmoid(0)");
+    /* d/dz at 0 = 0.25 */
+    tensor_backward(s);
+    CHECK_CLOSE(z->grad[0], 0.25f, 1e-5f, "sigmoid' at 0");
+    tensor_release(s);
+    tensor_release(z);
+
+    /* large positive saturates to ~1, finite gradient */
+    Tensor* big = tensor_create(40.0f);
+    Tensor* sb = tensor_sigmoid(big);
+    CHECK_CLOSE(sb->data[0], 1.0f, 1e-6f, "sigmoid(+big)");
+    CHECK(isfinite(sb->data[0]), "sigmoid(+big) finite");
+    tensor_release(sb);
+    tensor_release(big);
+
+    /* large negative saturates to ~0, no overflow */
+    Tensor* sm = tensor_create(-40.0f);
+    Tensor* ss = tensor_sigmoid(sm);
+    CHECK_CLOSE(ss->data[0], 0.0f, 1e-6f, "sigmoid(-big)");
+    CHECK(isfinite(ss->data[0]), "sigmoid(-big) finite");
+    tensor_release(ss);
+    tensor_release(sm);
+}
+
 int main(void) {
     /* smoke: scalar add still works */
     Tensor* a = tensor_create(2.0f);
@@ -41,6 +69,7 @@ int main(void) {
     tensor_release(b);
 
     test_sqrt_safe();
+    test_sigmoid();
 
     TEST_PASS();
     return 0;

@@ -53,6 +53,7 @@ Tensor* tensor_sub(Tensor* a, Tensor* b);
 Tensor* tensor_mean(Tensor* a);
 Tensor* tensor_div(Tensor* a, Tensor* b);
 Tensor* tensor_sqrt(Tensor* a);
+Tensor* tensor_sigmoid(Tensor* a);
 
 //
 // Backward engine
