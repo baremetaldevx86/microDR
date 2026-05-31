@@ -194,3 +194,4 @@ src/
 - **Adam optimizer** — faster convergence than vanilla SGD
 - **Hash-set topo sort** — the current O(N²) visited check in `tensor_backward`
   is fine for small graphs but becomes the bottleneck at large image sizes
+# trigger refresh
