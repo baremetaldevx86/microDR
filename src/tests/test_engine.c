@@ -49,6 +49,8 @@ static void test_sub_mul_div_broadcast(void) {
     tensor_backward(m);
     /* d/df = s = 2 each; d/ds = sum(f) = 12 */
     CHECK_CLOSE(f->grad[0], 2.0f, 1e-6f, "mul bc grad f");
+    CHECK_CLOSE(f->grad[1], 2.0f, 1e-6f, "mul bc grad f1");
+    CHECK_CLOSE(f->grad[2], 2.0f, 1e-6f, "mul bc grad f2");
     CHECK_CLOSE(s->grad[0], 12.0f, 1e-6f, "mul bc grad s");
     tensor_release(m);
 
@@ -58,6 +60,8 @@ static void test_sub_mul_div_broadcast(void) {
     tensor_backward(q);
     /* d/df = 1/s = 0.5 each; d/ds = sum(-f/s^2) = -(2+4+6)/4 = -3 */
     CHECK_CLOSE(f->grad[0], 0.5f, 1e-6f, "div bc grad f");
+    CHECK_CLOSE(f->grad[1], 0.5f, 1e-6f, "div bc grad f1");
+    CHECK_CLOSE(f->grad[2], 0.5f, 1e-6f, "div bc grad f2");
     CHECK_CLOSE(s->grad[0], -3.0f, 1e-6f, "div bc grad s");
     tensor_release(q);
 

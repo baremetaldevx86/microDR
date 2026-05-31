@@ -155,7 +155,7 @@ void tensor_release(Tensor* t) {
 /* Allocate the broadcast-result tensor for an elementwise binary op.
    Both scalar -> scalar; otherwise a matrix shaped like the larger operand. */
 static Tensor* alloc_broadcast(Tensor* a, Tensor* b) {
-    if (a->size == 1 && b->size == 1) {
+    if (a->ndim == 0 && b->ndim == 0) {
         return tensor_create(0.0f);
     }
     Tensor* big = (a->size >= b->size) ? a : b;
