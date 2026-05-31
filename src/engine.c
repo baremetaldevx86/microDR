@@ -152,6 +152,16 @@ void tensor_release(Tensor* t) {
 }
 
 
+/* Allocate the broadcast-result tensor for an elementwise binary op.
+   Both scalar -> scalar; otherwise a matrix shaped like the larger operand. */
+static Tensor* alloc_broadcast(Tensor* a, Tensor* b) {
+    if (a->size == 1 && b->size == 1) {
+        return tensor_create(0.0f);
+    }
+    Tensor* big = (a->size >= b->size) ? a : b;
+    return tensor_create_matrix(big->shape[0], big->shape[1]);
+}
+
 // ============================================================
 // Backward kernels
 // ============================================================
@@ -160,27 +170,28 @@ void tensor_release(Tensor* t) {
 static void add_backward(Tensor* self) {
     Tensor* a = self->parents[0];
     Tensor* b = self->parents[1];
+    int an = a->size, bn = b->size, n = self->size;
 
-    
-    // Case 1: same shape
-    if (a->size == b->size) {
-        for (int i = 0; i < self->size; i++) {
+    if (an == bn) {
+        for (int i = 0; i < n; i++) {
             a->grad[i] += self->grad[i];
             b->grad[i] += self->grad[i];
         }
-    }
-    // Case 2: bias broadcast
-    else if (b->size == a->shape[1]) {
-        int rows = a->shape[0];
-        int cols = a->shape[1];
-
-        for (int i = 0; i < rows; i++) {
+    } else if (an == 1 || bn == 1) {
+        for (int i = 0; i < n; i++) {
+            int ai = (an == 1) ? 0 : i;
+            int bi = (bn == 1) ? 0 : i;
+            a->grad[ai] += self->grad[i];
+            b->grad[bi] += self->grad[i];
+        }
+    } else {                                        /* bias row broadcast */
+        int rows = a->shape[0], cols = a->shape[1];
+        for (int i = 0; i < rows; i++)
             for (int j = 0; j < cols; j++) {
                 a->grad[i*cols + j] += self->grad[i*cols + j];
-                b->grad[j] += self->grad[i*cols + j];
+                b->grad[j]          += self->grad[i*cols + j];
             }
-        }
-    } 
+    }
 }
 
 static void sub_backward(Tensor* self) {
@@ -350,47 +361,40 @@ static void sigmoid_backward(Tensor* self) {
 // ============================================================
 
 Tensor* tensor_add(Tensor* a, Tensor* b) {
+    int an = a->size, bn = b->size;
     Tensor* c;
-    if (a->ndim == 0 && b->ndim == 0) {
-        c = tensor_create(0.0f);
-    } else {
-        int rows = (a->shape) ? a->shape[0] : b->shape[0];
-        int cols = (a->shape) ? a->shape[1] : b->shape[1];
-        c = tensor_create_matrix(rows, cols);
-    }
-    
-    // same shape 
-    if(a->size == b->size) {
-        for (int i = 0; i < a->size; i++) {
-            c->data[i] = a->data[i] + b->data[i];
-        }
-    }
-    // broadcast bias (1 x out)
-    else if(b->size == a->shape[1]) {
-        int rows = a->shape[0];
-        int cols = a->shape[1];
 
-        for (int i = 0; i < rows; i++) {
-            for (int j = 0; j < cols; j++) {
-                c->data[i*cols + j] = a->data[i*cols + j] + b->data[j];
-            }
+    if (an == bn) {
+        c = alloc_broadcast(a, b);
+        for (int i = 0; i < an; i++) c->data[i] = a->data[i] + b->data[i];
+    } else if (an == 1 || bn == 1) {
+        c = alloc_broadcast(a, b);
+        int n = c->size;
+        for (int i = 0; i < n; i++) {
+            float av = (an == 1) ? a->data[0] : a->data[i];
+            float bv = (bn == 1) ? b->data[0] : b->data[i];
+            c->data[i] = av + bv;
         }
-    }
-    else {
+    } else if (a->shape && bn == a->shape[1]) {     /* bias row broadcast */
+        int rows = a->shape[0], cols = a->shape[1];
+        c = tensor_create_matrix(rows, cols);
+        for (int i = 0; i < rows; i++)
+            for (int j = 0; j < cols; j++)
+                c->data[i*cols + j] = a->data[i*cols + j] + b->data[j];
+    } else {
         printf("tensor_add shape mismatch\n");
         exit(1);
     }
 
-
     c->parents = (Tensor**)malloc(sizeof(Tensor*) * 2);
     c->parents[0] = a;
     c->parents[1] = b;
-    tensor_retain(a); // Retain parent
-    tensor_retain(b); // Retain parent
+    tensor_retain(a);
+    tensor_retain(b);
     c->n_parents = 2;
     c->backward = add_backward;
     return c;
-} 
+}
 
 Tensor* tensor_sub(Tensor* a, Tensor* b) {
     Tensor* c;

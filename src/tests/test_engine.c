@@ -30,6 +30,32 @@ static void test_sqrt_safe(void) {
     tensor_release(p);
 }
 
+static void test_add_broadcast(void) {
+    /* field [3x1] + scalar [1] */
+    Tensor* f = tensor_create_matrix(3, 1);
+    f->data[0] = 1.0f; f->data[1] = 2.0f; f->data[2] = 3.0f;
+    Tensor* s = tensor_create(10.0f);
+
+    Tensor* c = tensor_add(f, s);     /* field + scalar */
+    CHECK_CLOSE(c->data[0], 11.0f, 1e-6f, "add bc 0");
+    CHECK_CLOSE(c->data[1], 12.0f, 1e-6f, "add bc 1");
+    CHECK_CLOSE(c->data[2], 13.0f, 1e-6f, "add bc 2");
+
+    tensor_backward(c);
+    /* each field elem gets grad 1; scalar gets sum = 3 */
+    CHECK_CLOSE(f->grad[0], 1.0f, 1e-6f, "add bc grad f0");
+    CHECK_CLOSE(s->grad[0], 3.0f, 1e-6f, "add bc grad s");
+    tensor_release(c);
+
+    /* scalar [1] + field [3x1] (scalar first) must also work */
+    Tensor* c2 = tensor_add(s, f);
+    CHECK_CLOSE(c2->data[2], 13.0f, 1e-6f, "add bc scalar-first");
+    tensor_release(c2);
+
+    tensor_release(f);
+    tensor_release(s);
+}
+
 static void test_sigmoid(void) {
     /* sigmoid(0) = 0.5 */
     Tensor* z = tensor_create(0.0f);
@@ -70,6 +96,7 @@ int main(void) {
 
     test_sqrt_safe();
     test_sigmoid();
+    test_add_broadcast();
 
     TEST_PASS();
     return 0;
